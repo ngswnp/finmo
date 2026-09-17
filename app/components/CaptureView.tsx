@@ -1,27 +1,33 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, ImageIcon, Sparkles, RefreshCw } from 'lucide-react';
+import { Camera, ImageIcon, Sparkles, RefreshCw, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type CaptureViewProps = {
   onCapture: (imageDataUrl: string) => void;
   isDetecting: boolean;
+  capturedImage: string | null;
+  onRetake: () => void;
 };
 
-export function CaptureView({ onCapture, isDetecting }: CaptureViewProps) {
+export function CaptureView({ onCapture, isDetecting, capturedImage, onRetake }: CaptureViewProps) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [hasCamera, setHasCamera] = useState(true);
   const [flash, setFlash] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [isFlashOn, setIsFlashOn] = useState(false);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (mode: 'environment' | 'user') => {
     try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: { facingMode: mode },
         audio: false,
       });
       streamRef.current = mediaStream;
@@ -34,6 +40,12 @@ export function CaptureView({ onCapture, isDetecting }: CaptureViewProps) {
       setHasCamera(false);
     }
   }, []);
+
+  const flipCamera = useCallback(() => {
+    const newMode = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(newMode);
+    startCamera(newMode);
+  }, [facingMode, startCamera]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -55,7 +67,6 @@ export function CaptureView({ onCapture, isDetecting }: CaptureViewProps) {
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
         setFlash(true);
         setTimeout(() => setFlash(false), 400);
-        setSelectedImage(dataUrl);
         stopCamera();
         onCapture(dataUrl);
       }
@@ -69,7 +80,6 @@ export function CaptureView({ onCapture, isDetecting }: CaptureViewProps) {
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
-        setSelectedImage(dataUrl);
         setFlash(true);
         setTimeout(() => setFlash(false), 400);
         onCapture(dataUrl);
@@ -80,24 +90,45 @@ export function CaptureView({ onCapture, isDetecting }: CaptureViewProps) {
   );
 
   const retake = useCallback(() => {
-    setSelectedImage(null);
-    startCamera();
-  }, [startCamera]);
+    onRetake();
+    startCamera(facingMode);
+  }, [facingMode, startCamera, onRetake]);
 
   useEffect(() => {
-    startCamera();
+    if (!selectedImage) {
+      startCamera(facingMode);
+    }
     return () => stopCamera();
-  }, [startCamera, stopCamera]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedImage, startCamera]);
+
+  // Handle actual hardware flash (torch) if supported by device
+  useEffect(() => {
+    if (stream) {
+      const track = stream.getVideoTracks()[0];
+      if (track && track.applyConstraints) {
+        try {
+          track.applyConstraints({
+            advanced: [{ torch: isFlashOn } as any],
+          }).catch(() => {
+            // Torch not supported or error applying constraint, ignore silently
+          });
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+  }, [isFlashOn, stream]);
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 pt-4">
+    <div className="flex flex-1 flex-col items-center justify-start px-4 pt-24 pb-24">
       {/* Camera viewport — rounded square */}
-      <div className="relative w-full max-w-[320px] aspect-square">
+      <div className="relative w-full max-w-[380px] aspect-square">
         {/* Outer glow */}
-        <div className="absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-primary/15 via-primary/5 to-transparent blur-xl" />
+        <div className="absolute -inset-3 rounded-[2.5rem] bg-gradient-to-br from-primary/15 via-primary/5 to-transparent blur-xl" />
 
         {/* Rounded square frame */}
-        <div className="relative h-full w-full rounded-[1.75rem] overflow-hidden border-2 border-secondary bg-black shadow-xl shadow-black/10">
+        <div className="relative h-full w-full rounded-[2.25rem] overflow-hidden bg-black shadow-xl shadow-black/10">
           {selectedImage ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -149,7 +180,7 @@ export function CaptureView({ onCapture, isDetecting }: CaptureViewProps) {
       </div>
 
       {/* Action area */}
-      <div className="mt-10 flex flex-col items-center gap-5">
+      <div className="mt-10 flex flex-col items-center gap-5 w-full">
         {selectedImage ? (
           <div className="flex flex-col items-center gap-3">
             <p className="text-sm text-muted-foreground">
@@ -166,51 +197,70 @@ export function CaptureView({ onCapture, isDetecting }: CaptureViewProps) {
             )}
           </div>
         ) : (
-          <>
-            {/* Capture button — blue gradient, white icon */}
-            <button
-              onClick={capturePhoto}
-              disabled={!hasCamera || !stream || isDetecting}
-              className={cn(
-                'relative flex h-20 w-20 items-center justify-center rounded-full transition-all',
-                'bg-gradient-to-br from-blue-500 to-blue-700 shadow-lg shadow-blue-500/30',
-                'hover:scale-105 active:scale-95',
-                'disabled:opacity-30 disabled:hover:scale-100'
-              )}
-              aria-label="Take photo"
-            >
-              {!isDetecting && (
-                <span className="absolute inset-0 rounded-full border-2 border-blue-400 animate-pulse-ring" />
-              )}
-              <Camera className="h-8 w-8 text-white" strokeWidth={2} />
-            </button>
-
-            {/* Upload from gallery */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ImageIcon className="h-4 w-4" />
-              Upload from gallery
-            </button>
+          <div className="flex flex-col items-center w-full">
             <input
-              ref={fileInputRef}
               type="file"
               accept="image/*"
               className="hidden"
+              ref={fileInputRef}
               onChange={handleFileUpload}
             />
-          </>
+            {/* Add an image button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2.5 text-[17px] font-bold text-slate-300 hover:scale-105 transition-transform bg-transparent border border-slate-300/40 px-6 py-2.5 rounded-full mb-10"
+            >
+              <ImageIcon className="h-5 w-5" />
+              Add an image
+            </button>
+
+            <div className="relative flex w-full max-w-[300px] items-center justify-center">
+              {/* Capture button — shutter style */}
+              <button
+                onClick={capturePhoto}
+                disabled={!hasCamera || !stream || isDetecting}
+                className={cn(
+                  'relative flex h-[90px] w-[90px] items-center justify-center rounded-full transition-all p-1',
+                  'border-[6px] border-slate-300 bg-transparent',
+                  'hover:scale-105 active:scale-95',
+                  'disabled:opacity-30 disabled:hover:scale-100'
+                )}
+                aria-label="Take photo"
+              >
+                {!isDetecting && (
+                  <span className="absolute -inset-[10px] rounded-full border border-slate-300 animate-pulse-ring" />
+                )}
+                {/* Inner solid circle instead of Camera icon */}
+                <div className="h-full w-full rounded-full bg-slate-300 shadow-sm" />
+              </button>
+
+              {/* Flash button */}
+              <button
+                onClick={() => setIsFlashOn(!isFlashOn)}
+                disabled={!hasCamera || isDetecting}
+                className="absolute left-0 p-2 text-slate-300 hover:scale-110 transition-transform disabled:opacity-30"
+                aria-label="Toggle flash"
+              >
+                <Zap
+                  className="h-[46px] w-[46px] scale-y-[1.15]"
+                  strokeWidth={2}
+                  fill={isFlashOn ? 'currentColor' : 'none'}
+                />
+              </button>
+
+              {/* Flip camera button */}
+              <button
+                onClick={flipCamera}
+                disabled={!hasCamera || isDetecting}
+                className="absolute right-0 p-2 text-slate-300 hover:scale-110 transition-transform disabled:opacity-30"
+                aria-label="Flip camera"
+              >
+                <RefreshCw className="h-[46px] w-[46px]" strokeWidth={2.5} />
+              </button>
+            </div>
+          </div>
         )}
       </div>
-
-      {/* Helper text */}
-      {!selectedImage && !isDetecting && (
-        <p className="mt-8 text-xs text-muted-foreground/60 flex items-center gap-1.5">
-          <Sparkles className="h-3 w-3" />
-          Point your camera at your meal
-        </p>
-      )}
     </div>
   );
 }

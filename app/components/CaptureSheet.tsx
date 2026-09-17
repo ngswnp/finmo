@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Camera, X, Loader2, Check, Utensils, DollarSign, Tag } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { supabase, type FoodEntry } from '@/lib/supabase-client';
+import { supabase, supabaseUrl, supabaseAnonKey, type FoodEntry } from '@/lib/supabase-client';
 import { cn } from '@/lib/utils';
 
 type CaptureSheetProps = {
@@ -29,13 +29,11 @@ export function CaptureSheet({ open, onClose, imageDataUrl, onPosted }: CaptureS
     setDetecting(true);
     setError(null);
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
       const apiUrl = `${supabaseUrl}/functions/v1/detect-dish`;
       const res = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${anonKey}`,
+          Authorization: `Bearer ${supabaseAnonKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ image: imageDataUrl }),
@@ -78,7 +76,7 @@ export function CaptureSheet({ open, onClose, imageDataUrl, onPosted }: CaptureS
         .from('food_entries')
         .insert({
           dish_name: dishName.trim(),
-          price: parseFloat(price),
+          price: parseFloat(price.replace(',', '.')),
           image_url: imageDataUrl,
           note: note.trim() || null,
         })
@@ -90,8 +88,9 @@ export function CaptureSheet({ open, onClose, imageDataUrl, onPosted }: CaptureS
       setTimeout(() => {
         onPosted(data as FoodEntry);
       }, 900);
-    } catch {
-      setError('Failed to post. Please try again.');
+    } catch (err: any) {
+      console.error("Supabase insert error:", err);
+      setError(`Failed to post: ${err.message || 'Unknown error'}`);
     } finally {
       setPosting(false);
     }

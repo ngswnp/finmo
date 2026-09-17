@@ -5,7 +5,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'finMO — Track Your Food Expenses',
+  title: 'FinMo — Track Your Food Expenses',
   description: 'Snap a photo of your meal, get an instant price estimate, and track your food spending.',
   viewport: {
     width: 'device-width',
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   },
   themeColor: '#ffffff',
   openGraph: {
-    title: 'finMO',
+    title: 'FinMo',
     description: 'Snap. Estimate. Track your food expenses.',
   },
 };
