@@ -1,0 +1,33 @@
+import './globals.css';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'] });
+
+export const metadata: Metadata = {
+  title: 'finMO — Track Your Food Expenses',
+  description: 'Snap a photo of your meal, get an instant price estimate, and track your food spending.',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
+  themeColor: '#ffffff',
+  openGraph: {
+    title: 'finMO',
+    description: 'Snap. Estimate. Track your food expenses.',
+  },
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>{children}</body>
+    </html>
+  );
+}

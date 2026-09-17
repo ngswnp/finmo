@@ -1,0 +1,4 @@
+project_id = ""
+
+[functions.detect-dish]
+verify_jwt = false
